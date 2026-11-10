@@ -1,0 +1,234 @@
+{{define "eventform"}}
+  <label class="field"><span>Title</span>
+    <input type="text" name="title" value="{{.Title}}" maxlength="200" required>
+  </label>
+  <div class="grid">
+    <label class="field"><span>{{if .RepeatLocked}}First day{{else}}Date{{end}}</span>
+      <input type="date" name="date" value="{{.Date}}" required>
+    </label>
+    <label class="field"><span>Start</span>
+      <input type="time" name="start" value="{{.Start}}">
+    </label>
+    <label class="field"><span>End (optional)</span>
+      <input type="time" name="end" value="{{.End}}">
+    </label>
+    <label class="field"><span>Tag</span>
+      <input type="text" name="tag" value="{{.Tag}}" maxlength="30">
+    </label>
+  </div>
+  <label class="check"><input type="checkbox" name="all_day" value="1" {{if .AllDay}}checked{{end}}> All day</label>
+
+  {{if .ShowRepeat}}
+  <div class="repeat stack">
+    {{if .RepeatLocked}}
+      <input type="hidden" name="repeat" value="1">
+      <p class="muted">This repeats, and changes here apply to every repeat. To change just one day, skip that day and add a one-off event.</p>
+    {{else}}
+      <label class="check"><input type="checkbox" name="repeat" value="1" {{if .Repeat}}checked{{end}}> Repeat</label>
+    {{end}}
+    <div class="grid">
+      <label class="field"><span>Every</span>
+        <select name="every">
+          <option value="1" {{if eq .Every "1"}}selected{{end}}>week</option>
+          <option value="2" {{if eq .Every "2"}}selected{{end}}>2 weeks</option>
+          <option value="3" {{if eq .Every "3"}}selected{{end}}>3 weeks</option>
+          <option value="4" {{if eq .Every "4"}}selected{{end}}>4 weeks</option>
+        </select>
+      </label>
+      <label class="field"><span>Last day (optional)</span>
+        <input type="date" name="until" value="{{.Until}}">
+      </label>
+    </div>
+    <div class="row days">
+      {{range .Days}}<label class="check"><input type="checkbox" name="days" value="{{.Value}}" {{if .Checked}}checked{{end}}> {{.Label}}</label>{{end}}
+    </div>
+  </div>
+  {{end}}
+{{end}}
+
+{{define "list"}}
+<div class="stack">
+  <div class="page-head">
+    <h1>Calendar</h1>
+    <a class="btn btn-ghost" href="/">Back to day view</a>
+  </div>
+
+  {{if .Error}}<div class="alert alert-error" role="alert">{{.Error}}</div>{{end}}
+  {{if .Notice}}<div class="alert alert-ok" role="status">{{.Notice}}</div>{{end}}
+
+  <section class="panel">
+    <h2>Ask or speak</h2>
+    {{if .AIReady}}
+    <form method="post" action="/m/calendar/ask" class="stack">
+      <textarea id="ask-text" name="text" rows="3" maxlength="1000" required
+        placeholder="For example: move gym to 5pm tomorrow, and add dentist Thursday at 3"></textarea>
+      <div class="row">
+        <button class="btn" type="submit">Propose changes</button>
+        {{if .SpeechReady}}<button class="btn btn-ghost" type="button" id="mic">Record</button>{{end}}
+        <span class="muted" id="mic-status"></span>
+      </div>
+      <p class="muted">Nothing changes until you confirm.</p>
+    </form>
+    {{else}}
+    <p class="muted">Add your Claude API key in <a href="/profile">Profile</a> to change your calendar by typing or speaking.</p>
+    {{end}}
+  </section>
+
+  <section class="panel">
+    <h2>Add an event</h2>
+    <form method="post" action="/m/calendar/events" class="stack">
+      {{template "eventform" .Form}}
+      <div class="row"><button class="btn" type="submit">Add event</button></div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Next 14 days</h2>
+    {{range .Groups}}
+      <h3 class="day-label">{{.Label}}</h3>
+      <ul class="events">
+        {{range .Events}}
+        <li>
+          <span class="when">{{.When}}</span>
+          <span class="title">{{.Title}}</span>
+          {{if .Tag}}<span class="tag">{{.Tag}}</span>{{end}}
+          {{if .Repeats}}<span class="tag">repeats</span>{{end}}
+          <span class="actions">
+            {{if .Repeats}}
+            <a class="btn btn-ghost btn-sm" href="/m/calendar/edit?id={{.SeriesID}}">Edit all</a>
+            <form method="post" action="/m/calendar/delete" onsubmit="return confirm('Skip just this day?')">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <button class="btn btn-danger btn-sm" type="submit">Skip this day</button>
+            </form>
+            {{else}}
+            <a class="btn btn-ghost btn-sm" href="/m/calendar/edit?id={{.ID}}">Edit</a>
+            <form method="post" action="/m/calendar/delete" onsubmit="return confirm('Delete this event?')">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+            </form>
+            {{end}}
+          </span>
+        </li>
+        {{end}}
+      </ul>
+    {{else}}
+      <p class="muted">Nothing scheduled in the next 14 days.</p>
+    {{end}}
+  </section>
+
+  {{if .SeriesList}}
+  <section class="panel">
+    <h2>Repeating events</h2>
+    <ul class="events">
+      {{range .SeriesList}}
+      <li>
+        <span class="title">{{.Title}}</span>
+        <span class="muted">{{.Rule}}, {{.Time}}</span>
+        {{if .Tag}}<span class="tag">{{.Tag}}</span>{{end}}
+        <span class="actions">
+          <a class="btn btn-ghost btn-sm" href="/m/calendar/edit?id={{.ID}}">Edit</a>
+          <form method="post" action="/m/calendar/delete" onsubmit="return confirm('Delete every repeat of this event?')">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button class="btn btn-danger btn-sm" type="submit">Delete all</button>
+          </form>
+        </span>
+      </li>
+      {{end}}
+    </ul>
+  </section>
+  {{end}}
+</div>
+
+{{if and .AIReady .SpeechReady}}
+<script>
+(function () {
+  var btn = document.getElementById('mic');
+  var box = document.getElementById('ask-text');
+  var status = document.getElementById('mic-status');
+  if (!btn || !box) { return; }
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    btn.hidden = true;
+    return;
+  }
+  var rec = null;
+  var chunks = [];
+
+  btn.addEventListener('click', async function () {
+    if (rec && rec.state === 'recording') { rec.stop(); return; }
+    try {
+      var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      rec = new MediaRecorder(stream);
+      chunks = [];
+      rec.ondataavailable = function (e) { if (e.data.size) { chunks.push(e.data); } };
+      rec.onstop = async function () {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        btn.textContent = 'Record';
+        status.textContent = 'Transcribing...';
+        var blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        try {
+          var res = await fetch('/m/calendar/voice', {
+            method: 'POST',
+            headers: { 'Content-Type': blob.type },
+            body: blob
+          });
+          var data = await res.json();
+          if (!res.ok) { throw new Error(data.error || 'failed'); }
+          box.value = (box.value ? box.value + ' ' : '') + data.text;
+          status.textContent = 'Check the text, then propose changes.';
+        } catch (err) {
+          status.textContent = 'Transcription failed: ' + err.message;
+        }
+      };
+      rec.start();
+      btn.textContent = 'Stop';
+      status.textContent = 'Listening...';
+    } catch (err) {
+      status.textContent = 'Microphone not available: ' + err.message;
+    }
+  });
+})();
+</script>
+{{end}}
+{{end}}
+
+{{define "edit"}}
+<div class="stack">
+  <div class="page-head">
+    <h1>Edit event</h1>
+    <a class="btn btn-ghost" href="/m/calendar">Cancel</a>
+  </div>
+  {{if .Error}}<div class="alert alert-error" role="alert">{{.Error}}</div>{{end}}
+  <section class="panel">
+    <form method="post" action="/m/calendar/update" class="stack">
+      <input type="hidden" name="id" value="{{.ID}}">
+      {{template "eventform" .Form}}
+      <div class="row"><button class="btn" type="submit">Save changes</button></div>
+    </form>
+  </section>
+</div>
+{{end}}
+
+{{define "confirm"}}
+<div class="stack">
+  <div class="page-head"><h1>Confirm changes</h1></div>
+  {{if .Say}}<p class="muted">{{.Say}}</p>{{end}}
+  <p class="muted">You asked: {{.Original}}</p>
+  <section class="panel">
+    <ul class="events">
+      {{range .Actions}}
+      <li><span class="kind kind-{{.Kind}}">{{.Kind}}</span><span class="title">{{.Text}}</span></li>
+      {{end}}
+    </ul>
+    <div class="row">
+      <form method="post" action="/m/calendar/apply">
+        <input type="hidden" name="token" value="{{.Token}}">
+        <button class="btn" type="submit">Confirm</button>
+      </form>
+      <form method="post" action="/m/calendar/discard">
+        <input type="hidden" name="token" value="{{.Token}}">
+        <button class="btn btn-ghost" type="submit">Deny</button>
+      </form>
+    </div>
+  </section>
+</div>
+{{end}}
